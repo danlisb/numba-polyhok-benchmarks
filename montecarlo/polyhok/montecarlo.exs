@@ -54,6 +54,10 @@ PolyHok.defmodule MonteCarlo do
   # st guarda os estados: st[4*i] = s0 baixo, st[4*i+1] = s0 alto, st[4*i+2] = s1 baixo,
   # st[4*i+3] = s1 alto (mesma ordem de bytes do vetor de estados do Numba)
   defk mc_integrator_kernel(out, st, lower_lim, upper_lim, size, f) do
+    # No original os limites sao inteiros do Python (int64), e amostra float32 * int64 da
+    # float64 no Numba; aqui os limites sao double, com os mesmos valores.
+    type lower_lim double
+    type upper_lim double
     gid = blockIdx.x * blockDim.x + threadIdx.x
 
     if gid < size do
@@ -81,14 +85,15 @@ PolyHok.defmodule MonteCarlo do
 
       # uint64_to_unit_float32: float32((result >> 11) * 2^-53)
       # a = 21 bits altos e c = 32 bits baixos de (result >> 11). A expressao e toda em double
-      # e exata (53 bits); so a atribuicao a samp arredonda para float, como no Numba.
+      # e exata (53 bits); so a atribuicao a u arredonda para float, como no Numba.
       a = lshr(rh, 11)
       c = shl(rh, 21) ||| lshr(rl, 11)
-      samp = (a * 4294967296.0 + (lshr(c, 16) * 65536.0 + (c &&& 65535))) * 1.1102230246251565e-16
+      var u float = (a * 4294967296.0 + (lshr(c, 16) * 65536.0 + (c &&& 65535))) * 1.1102230246251565e-16
 
-      # normaliza para o intervalo e avalia a funcao
-      samp = samp * (upper_lim - lower_lim) + lower_lim
-      out[gid] = f(samp)
+      # normaliza para o intervalo (em double, como no Numba) e avalia a funcao
+      var samp double = u * (upper_lim - lower_lim) + lower_lim
+      var y double = f(samp)
+      out[gid] = y
     end
   end
 
@@ -173,15 +178,17 @@ n = div(Nx.size(estados), 4)
 tpb = File.read!(Path.join([raiz, "data", "tpb.txt"])) |> String.trim() |> String.to_integer()
 out = PolyHok.new_gnx({n}, {:f, 32})
 
-if System.get_env("POLYHOK_DEBUG"), do: PolyHok.set_debug_logs(true)
-
 # 1a. Conferencia do gerador: com f(x) = x em [0, 1), out recebe a propria amostra
 MonteCarlo.amostrar(out, PolyHok.new_gnx(estados), n, tpb, 0.0, 1.0, identidade)
 File.write!(Path.join(out_dir, "polyhok_amostras.bin"), out |> PolyHok.get_gnx() |> Nx.to_binary())
-PolyHok.set_debug_logs(false)
 
 # 1b. Validacao, sempre a partir dos estados iniciais: [1, 2] e [2, 3], como no original
+# (POLYHOK_DEBUG=1 mostra o CUDA gerado para o kernel com f(x) = 1/x e para a reducao)
+if System.get_env("POLYHOK_DEBUG"), do: PolyHok.set_debug_logs(true)
 r12 = MonteCarlo.integrar(out, PolyHok.new_gnx(estados), n, tpb, 1.0, 2.0, func)
+PolyHok.set_debug_logs(false)
+# f(amostra), antes da reducao
+File.write!(Path.join(out_dir, "polyhok_fx.bin"), out |> PolyHok.get_gnx() |> Nx.to_binary())
 r23 = MonteCarlo.integrar(out, PolyHok.new_gnx(estados), n, tpb, 2.0, 3.0, func)
 File.write!(Path.join(out_dir, "polyhok.txt"), "#{r12}\n#{r23}\n")
 

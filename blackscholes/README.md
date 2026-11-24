@@ -11,40 +11,55 @@ Port do Black-Scholes do repositório oficial [numba-examples](https://github.co
 | `numba/blackscholes.py` | Referência NumPy original, usada na validação |
 | `numba/run.py` | Executa o original e mede o tempo |
 | `polyhok/blackscholes.exs` | Port para a PolyHok |
+| `polyhok/codigo_gerado.cu` | CUDA que a PolyHok gera para o port |
 | `gen_data.py` | Gera as mesmas entradas para as duas versões |
-| `check.py` | Confere os resultados contra a referência NumPy |
+| `check.py` | Confere os resultados contra a referência NumPy e compara as duas versões |
 | `bench.sh` | 3 rodadas de 30 repetições das duas versões + validação |
-| `polyhok/codigo_gerado_referencia.cu` | CUDA gerado pela PolyHok para o port |
 
 ## Como foi feita a comparação
 
 - **Mesmas entradas:** as duas versões leem os arquivos gerados por `gen_data.py`, com a mesma
   distribuição do gerador original (S de 5 a 30, X de 1 a 100, T de 0,25 a 10; R = 0,02; V = 0,30).
 - **Mesma estrutura:** uma função de device (`cnd`), uma opção por thread, 1024 threads por bloco.
-- **O que é medido:** cópia das entradas para a GPU, execução do kernel e cópia dos resultados
-  de volta, como na função `black_scholes_cuda` original.
-- **Compilação fora da medição:** as duas versões fazem uma execução de aquecimento
-  antes de medir, para que a compilação JIT não entre no tempo.
-- **Validação:** `check.py` usa o mesmo critério do validador original (`rtol = atol = 1e-5`).
+- **Mesmos tipos:** veja abaixo.
+- **Duas medidas**, com uma execução de aquecimento antes (compilação JIT fora da medição):
+  - `total`: cópias para a GPU, kernel e cópias de volta, como a função `black_scholes_cuda` original;
+  - `gpu`: só o kernel, com os dados já na GPU.
+- **Validação:** `check.py` usa o mesmo critério do validador original (`rtol = atol = 1e-5`) e
+  compara as saídas das duas versões entre si. **As 8 milhões de saídas (call e put) são
+  idênticas bit a bit.**
+
+## Tipos
+
+Os vetores são `float32`, mas o Numba faz quase todas as contas em `float64`: R e V são floats
+do Python (`float64`), então `d1`, `d2`, `cnd`, `expRT` e as contas de call/put saem em `float64`.
+Só `sqrt(T[i])` e `log(S[i] / X[i])` ficam em `float32`. (Conferido com `inspect_types`.)
+
+O port declara os mesmos tipos (`type r double`, `var d1 double = ...` etc.). Isso pesa no
+desempenho: GPUs GeForce fazem contas `float64` bem mais devagar que `float32`.
+
+## Limitações da PolyHok encontradas no port
+
+1. **Literal em contexto `double`:** `var a1 double = 0.31938153` dá erro de tipo (o verificador
+   só aceita literal sozinho em contexto `float`). As constantes de `cnd` foram escritas direto
+   na expressão, onde o literal é aceito e o CUDA gerado já o trata como `double`.
+2. **Comparação de `double` com literal:** `d > 0.0` dá erro de tipo. Foi escrito `d > d * 0.0`
+   (mesma condição para `d` finito; o tipo da expressão vem do primeiro operando).
+3. **Reatribuição de variável declarada com `var` (bug):** com `var ret_val double = ...` e
+   `ret_val = 1.0 - ret_val` dentro de um `if`, a PolyHok gera `double ret_val = 1.0 - ret_val;`
+   dentro do `if`, ou seja, declara uma variável nova e a reatribuição se perde, sem erro.
+   O resultado sai errado (a validação acusou). Contorno: `type ret_val double` + atribuição comum.
+4. **Sem conversão implícita de `double` para `float`:** gravar uma expressão `double` num vetor
+   `float` dá erro de tipo; o valor passa por uma variável `double` antes.
 
 ## Como rodar
 
 Pré-requisitos e instalação: veja o [README principal](../README.md).
 
 ```bash
-python3 gen_data.py 4000000   # 4 milhões de opções, maior tamanho do benchmark original
+source ~/venv-numba/bin/activate
+python gen_data.py 4000000    # 4 milhões de opções, maior tamanho do benchmark original
 bash bench.sh                 # 3 rodadas de 30 repetições das duas versões + validação
 ```
 
-Para ver o código CUDA gerado pela PolyHok, acrescente `PolyHok.set_debug_logs(true)`
-antes do aquecimento em `blackscholes.exs`.
-
-## Ponto de atenção: precisão
-
-Os vetores são `float32` nas duas versões, mas nenhuma delas faz tudo em precisão simples:
-
-- **Numba:** os literais (`0.5`, `1.0`) e os escalares R e V são `float64`.
-- **PolyHok:** R e V viram `float`, mas o código CUDA gerado escreve os literais como `0.5` e `1.0`,
-  que em C são `double`, então parte das contas também é feita em precisão dupla.
-
-A diferença entre as duas fica só em R e V. Vale mencionar isso no trabalho.
+Para ver o CUDA gerado: `POLYHOK_DEBUG=1 mix run blackscholes.exs 3` (na pasta `polyhok`).

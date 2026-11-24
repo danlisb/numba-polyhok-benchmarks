@@ -31,6 +31,7 @@ out = cuda.device_array(n, dtype=np.float32)
 
 # 1. Validacao, sempre a partir dos estados iniciais
 r12 = integrar(out, cuda.to_device(estados_host), 1, 2)
+out.copy_to_host().tofile(os.path.join(OUT, "numba_fx.bin"))  # f(amostra), antes da reducao
 r23 = integrar(out, cuda.to_device(estados_host), 2, 3)
 with open(os.path.join(OUT, "numba.txt"), "w") as f:
     f.write(f"{float(r12)!r}\n{float(r23)!r}\n")

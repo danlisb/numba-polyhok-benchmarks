@@ -2,7 +2,8 @@
 
 1. Gerador: as amostras do xoroshiro128+ portado para a PolyHok devem ser identicas, bit a bit,
    as do Numba (data/amostras_ref.bin), partindo dos mesmos estados.
-2. Integrais: mesmo criterio do exemplo original (atol = 0,001 em relacao aos valores
+2. f(amostra) em [1, 2], antes da reducao: identico bit a bit entre Numba e PolyHok.
+3. Integrais: mesmo criterio do exemplo original (atol = 0,001 em relacao aos valores
    calculados no Maple: 0,69315 para [1, 2] e 0,4055 para [2, 3]); mostra tambem a
    diferenca entre as duas versoes.
 Uso: python3 check.py
@@ -27,6 +28,17 @@ if os.path.exists(caminho):
         print(f"gerador: DIVERGE ({iguais} de {len(ref)} amostras identicas)")
 else:
     print("gerador: sem resultados da PolyHok")
+
+# f(amostra) em [1, 2], antes da reducao: deve ser identico bit a bit entre as versoes
+fx = {v: os.path.join(RAIZ, "out", f"{v}_fx.bin") for v in ("numba", "polyhok")}
+if all(os.path.exists(c) for c in fx.values()):
+    a, b = (np.fromfile(c, dtype=np.uint32) for c in fx.values())
+    iguais = int((a == b).sum())
+    if len(a) == len(b) and iguais == len(a):
+        print(f"f(amostra): OK ({iguais} valores identicos bit a bit entre Numba e PolyHok)")
+    else:
+        ok = False
+        print(f"f(amostra): DIVERGE ({iguais} de {len(a)} valores identicos)")
 
 esperado = {"[1, 2]": 0.69315, "[2, 3]": 0.4055}
 res = {}

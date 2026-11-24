@@ -26,6 +26,7 @@ Com N = 2^25, são 3 lançamentos: 33.554.432 → 32.768 → 32 → 1.
 | `numba/reduction_cuda.py` | Versão estendida para vários blocos |
 | `numba/run.py` | Mede a versão Numba |
 | `polyhok/reducao.exs` | Port para a PolyHok |
+| `polyhok/codigo_gerado.cu` | CUDA que a PolyHok gera para o port |
 | `gen_data.py` | Gera o vetor de entrada (int32, valores de 0 a 9) |
 | `check.py` | Compara as somas com `np.sum` (comparação exata) |
 | `bench.sh` | 3 rodadas de 30 repetições das duas versões + validação |
@@ -34,17 +35,21 @@ Com N = 2^25, são 3 lançamentos: 33.554.432 → 32.768 → 32 → 1.
 
 - **Mesmo kernel:** 1024 threads por bloco, vetor `int32` de 1024 posições em memória
   compartilhada, redução em árvore com `tid % (2*s)`. O código CUDA gerado pela PolyHok
-  (veja com `POLYHOK_DEBUG=1 mix run reducao.exs 3`) é equivalente linha a linha ao kernel Numba.
-- **Tipo inteiro:** como no original (memória compartilhada `int32`). Valores de 0 a 9
+  (`polyhok/codigo_gerado.cu`) é equivalente linha a linha ao kernel Numba.
+- **Tipo inteiro:** como no original (memória compartilhada `int32`); todas as contas do kernel
+  são inteiras nas duas versões. Valores de 0 a 9
   mantêm a soma dentro de `int32` e permitem validação exata.
 - **Duas medidas**, com aquecimento antes (JIT fora da medição):
   - `total`: cópia host→GPU + kernels + cópia do resultado;
   - `gpu`: dados já na GPU, só kernels + cópia do resultado.
 
-## Como rodar (WSL)
+## Como rodar
+
+Pré-requisitos e instalação: veja o [README principal](../README.md).
 
 ```bash
-python3 gen_data.py            # 2^25 elementos
+source ~/venv-numba/bin/activate
+python gen_data.py             # 2^25 elementos
 bash bench.sh
 ```
 

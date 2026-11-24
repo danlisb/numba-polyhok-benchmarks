@@ -18,29 +18,55 @@ validador e um script de medição.
 
 RTX 5060 (driver 621.24), WSL 2 com Ubuntu 24.04, CUDA 12.9, numba-cuda 0.30.4, Elixir 1.17.3 / OTP 25,
 PolyHok no commit `32397e6`. Mediana de 30 execuções, faixa de 3 rodadas, com aquecimento antes
-(compilação JIT fora da medição). As duas versões passam na validação em todos os programas.
+(compilação JIT fora da medição).
 
 | Programa | Medida | Numba | PolyHok |
 |---|---|---|---|
-| Black-Scholes (4 M opções) | cópias + kernel | 16,5–17,8 ms | 25,0–29,2 ms |
-| | melhor execução | 13,1–14,2 ms | 13,1–14,0 ms |
-| Redução (2^25 int32) | cópia + kernels | 17,8–18,8 ms | 19,4–19,8 ms |
-| | dados já na GPU | 1,74–1,80 ms | 3,10–3,39 ms |
-| Monte Carlo (2^24 amostras) | só o kernel de amostragem | 1,56–1,58 ms | 1,63–1,78 ms |
-| | kernel + redução | 1,79–1,80 ms | 4,15–4,41 ms |
+| Black-Scholes (4 M opções) | cópias + kernel | 18,9–20,6 ms | 14,7–17,3 ms |
+| | só o kernel | 3,28–3,56 ms | 3,18–3,74 ms |
+| Redução (2^25 int32) | cópia + kernels | 18,3–18,5 ms | 18,8–19,8 ms |
+| | dados já na GPU | 1,71–1,73 ms | 3,33–3,42 ms |
+| Monte Carlo (2^24 amostras) | só o kernel de amostragem | 1,55–1,58 ms | 2,14 ms |
+| | kernel + redução | 1,77–1,81 ms | 4,68–4,74 ms |
+
+Validação (as duas versões partem das mesmas entradas):
+
+| Programa | Resultado |
+|---|---|
+| Black-Scholes | 8 milhões de saídas **idênticas bit a bit** entre Numba e PolyHok |
+| Redução | soma exata nas duas versões |
+| Monte Carlo | amostras do gerador e valores de f **idênticos bit a bit**; integrais diferem em ~8e-8 (ordem da soma) |
 
 Observações:
 
-- **Black-Scholes:** no melhor caso as duas empatam (o tempo é dominado pelas cópias);
-  a PolyHok varia mais de uma execução para outra, e a causa não foi investigada.
+- **Black-Scholes:** o kernel empata. O tempo com cópias é dominado pela transferência de
+  ~80 MB e varia vários ms entre rodadas nas duas versões.
 - **Redução:** o CUDA gerado pela PolyHok é equivalente linha a linha ao kernel Numba. A cada
   `spawn`, a PolyHok carrega o módulo, lança, sincroniza e descarrega (≈0,1–0,2 ms por chamada),
   e compila com NVRTC sem `-arch`. Isso não explica toda a diferença; o restante ainda não
   foi isolado.
 - **Monte Carlo:** a PolyHok não tem gerador aleatório nem inteiros de 64 bits; o xoroshiro128+
-  foi reescrito com pares de `int` de 32 bits e gera amostras **idênticas bit a bit** às do Numba.
-  A diferença no total vem da redução: o Numba usa `@cuda.reduce` (biblioteca) e a PolyHok
-  usa a redução em árvore de `reducao`, porque o esqueleto `reduce` está comentado na versão atual.
+  foi reescrito com pares de `int` de 32 bits, o que custa mais operações por amostra
+  (amostragem ~35% mais lenta). A maior parte da diferença no total vem da redução: o Numba usa
+  `@cuda.reduce` (biblioteca) e a PolyHok usa a redução em árvore de `reducao`, porque o
+  esqueleto `reduce` está comentado na versão atual.
+- **Tipos:** os ports usam os mesmos tipos que o Numba infere para o original (conferidos com
+  `inspect_types`). No Black-Scholes e no Monte Carlo, isso significa contas em `float64`,
+  porque escalares Python viram `float64` no Numba.
+
+## Limitações da PolyHok encontradas
+
+| Limitação | Onde apareceu | Contorno |
+|---|---|---|
+| Sem inteiros de 64 bits nem sem sinal | Monte Carlo (xoroshiro128+) | Pares de `int` de 32 bits |
+| Sem gerador aleatório no device | Monte Carlo | xoroshiro128+ escrito à mão |
+| Esqueleto `reduce` comentado | Monte Carlo | Kernel de redução em árvore |
+| Literal sozinho não aceito em contexto `double` (`var a double = 0.5`) | Black-Scholes | Literal dentro da expressão |
+| Comparação de `double` com literal (`d > 0.0`) dá erro de tipo | Black-Scholes | `d > d * 0.0` |
+| Sem conversão implícita `double` → `float` ao gravar em vetor | Black-Scholes, Monte Carlo | Variável `double` intermediária |
+| **Bug:** reatribuir dentro de `if` uma variável declarada com `var` gera uma nova declaração no C, e a reatribuição se perde sem erro | Black-Scholes | `type x double` + atribuição comum |
+
+Detalhes no README de cada programa.
 
 ## Ambiente (WSL 2)
 
