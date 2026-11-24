@@ -42,14 +42,16 @@ difere só na 8ª casa decimal, pela ordem da soma.
   foi escrito com pares de inteiros de 32 bits, e a amostragem fica uns 35% mais lenta. Na soma
   final, o Numba usa a redução pronta da biblioteca dele (`@cuda.reduce`). A PolyHok tem um
   equivalente, o esqueleto `reduce` (em `ske.ex`), que recebe um vetor e uma função como `a + b`
-  e monta o kernel sozinho, mas na versão atual o código dele está todo comentado. Por isso foi
-  usada a redução simples do programa `reducao`, mais lenta que a do Numba.
+  e monta o kernel sozinho. Mas na versão usada aqui (PolyHok 0.1.1, branch `main` de
+  [lups-ufpel/poly_hok](https://github.com/lups-ufpel/poly_hok), de 19/11/2026) o arquivo
+  `ske.ex` está inteiro comentado. Por isso foi usada a redução simples do programa `reducao`,
+  mais lenta que a do Numba.
 
 ## Limitações da PolyHok encontradas
 
 - Não há inteiros de 64 bits, inteiros sem sinal nem gerador de números aleatórios.
 - O esqueleto `reduce`, que monta uma redução a partir de uma função, está com o código todo
-  comentado na versão atual, então não pode ser usado.
+  comentado na versão usada (0.1.1, de 19/11/2026), então não pode ser usado.
 - O verificador de tipos rejeita alguns usos de `double`: um número sozinho
   (`var a double = 0.5`), a comparação com um número (`d > 0.0`) e a gravação de um
   `double` num vetor `float`.

@@ -34,8 +34,10 @@ amostras, a versão separada dá os mesmos valores do original (0,6929643 e 0,40
    xor, rotação, deslocamento) é feita sobre as duas metades com os operadores bit a bit
    da PolyHok (`<<<`, `>>>`, `&&&`, `|||`, `+++`). Os deslocamentos mascaram o operando antes,
    para o C gerado não ter comportamento indefinido com `int` negativo.
-2. **Redução.** O original usa `@cuda.reduce` (biblioteca do Numba). O esqueleto `reduce`
-   da PolyHok está comentado nesta versão, então a soma usa o kernel de redução em árvore
+2. **Redução.** O original usa `@cuda.reduce` (biblioteca do Numba). A PolyHok tem um
+   equivalente, o esqueleto `reduce` (`lib/poly_hok/ske.ex`), mas na versão usada (PolyHok 0.1.1,
+   branch `main` de lups-ufpel/poly_hok, de 19/11/2026) esse arquivo está inteiro comentado.
+   Então a soma usa o kernel de redução em árvore
    do programa `../reducao`, em `float`. **Os algoritmos de redução são diferentes**, por
    isso o tempo da amostragem é medido separado.
 3. **Função como parâmetro.** `f(x) = 1/x` é passada ao kernel com `PolyHok.phok`
