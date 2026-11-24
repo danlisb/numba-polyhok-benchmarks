@@ -1,7 +1,7 @@
 # Black-Scholes: Numba × PolyHok
 
 Port do Black-Scholes do repositório oficial [numba-examples](https://github.com/numba/numba-examples)
-(`examples/finance/blackscholes/blackscholes_cuda.py`, commit `c423f54`) para a PolyHok.
+(`examples/finance/blackscholes/blackscholes_cuda.py`) para a PolyHok.
 
 ## Estrutura
 
