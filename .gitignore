@@ -1,0 +1,17 @@
+# Dados gerados e resultados
+*/data/
+*/out/
+
+# Elixir / Mix
+*/polyhok/deps/
+*/polyhok/_build/
+erl_crash.dump
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Perfis do Nsight
+*.nsys-rep
+*.qdstrm
