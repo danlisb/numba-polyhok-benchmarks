@@ -33,19 +33,23 @@ difere só na 8ª casa decimal, pela ordem da soma.
 
 ### O que explica as diferenças
 
-- **Black-Scholes:** empate.
+- **Black-Scholes:** Numba e PolyHok têm o mesmo desempenho. Medindo só o kernel, as duas
+  versões levam cerca de 3,4 ms; a diferença entre elas é menor que a variação entre rodadas.
 - **Redução:** o código CUDA gerado é igual ao do Numba. A diferença vem, pelo menos em parte,
   de como a PolyHok lança cada kernel: ela carrega o módulo e espera o kernel terminar a cada
   chamada. O restante ainda não foi isolado.
 - **Monte Carlo:** a PolyHok não tem gerador aleatório nem inteiros de 64 bits, então o gerador
-  foi escrito com pares de inteiros de 32 bits, o que custa mais operações. Na soma, o Numba usa
-  a redução otimizada da biblioteca dele; a da PolyHok está desativada na versão atual, então
-  foi usada a redução simples do programa `reducao`.
+  foi escrito com pares de inteiros de 32 bits, e a amostragem fica uns 35% mais lenta. Na soma
+  final, o Numba usa a redução pronta da biblioteca dele (`@cuda.reduce`). A PolyHok tem um
+  equivalente, o esqueleto `reduce` (em `ske.ex`), que recebe um vetor e uma função como `a + b`
+  e monta o kernel sozinho, mas na versão atual o código dele está todo comentado. Por isso foi
+  usada a redução simples do programa `reducao`, mais lenta que a do Numba.
 
 ## Limitações da PolyHok encontradas
 
 - Não há inteiros de 64 bits, inteiros sem sinal nem gerador de números aleatórios.
-- O esqueleto `reduce` está desativado (comentado no código).
+- O esqueleto `reduce`, que monta uma redução a partir de uma função, está com o código todo
+  comentado na versão atual, então não pode ser usado.
 - O verificador de tipos rejeita alguns usos de `double`: um número sozinho
   (`var a double = 0.5`), a comparação com um número (`d > 0.0`) e a gravação de um
   `double` num vetor `float`.
