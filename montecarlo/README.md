@@ -37,8 +37,8 @@ amostras, a versão separada dá os mesmos valores do original (0,6929643 e 0,40
 2. **Redução.** O original usa `@cuda.reduce` (biblioteca do Numba). A PolyHok tem um
    equivalente, o esqueleto `reduce` (`lib/poly_hok/ske.ex`), mas na versão usada (PolyHok 0.1.1,
    branch `main` de lups-ufpel/poly_hok, de 19/11/2026) esse arquivo está inteiro comentado.
-   Então a soma usa o kernel de redução em árvore
-   do programa `../reducao`, em `float`. **Os algoritmos de redução são diferentes**, por
+   Então a soma usa o `reduce` genérico enviado pelo prof. Andre Du Bois, que também recebe a
+   operação (`a + b`) como função. **Os algoritmos das duas reduções são diferentes**, por
    isso o tempo da amostragem é medido separado.
 3. **Função como parâmetro.** `f(x) = 1/x` é passada ao kernel com `PolyHok.phok`
    (kernel de ordem superior), como o original passa `func`.
@@ -61,7 +61,7 @@ Partindo dos mesmos estados iniciais:
   (16.777.216 de 16.777.216);
 - **f(amostra):** os valores de f antes da redução também são idênticos bit a bit;
 - **integrais:** dentro de 0,001 dos valores do Maple (critério do teste original). As duas
-  versões diferem em até ~8e-8, só por causa da ordem da soma (`@cuda.reduce` × redução em árvore).
+  versões diferem em até ~4e-8, só por causa da ordem da soma (`@cuda.reduce` × `reduce` da PolyHok).
 
 ## Medidas
 

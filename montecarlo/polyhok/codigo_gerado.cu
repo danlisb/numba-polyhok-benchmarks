@@ -26,7 +26,7 @@ int add_lo(int al, int bl)
 return ((shl(h16, 16) | (l16 & 65535)));
 }
 __device__
-double anon_a7886no2me(double x)
+double anon_d09m9gj4gd(double x)
 {
 return ((1.0 / x));
 }
@@ -53,36 +53,40 @@ if((gid < size))
 	int c = (shl(rh, 21) | lshr(rl, 11));
 float u = (((a * 4294967296.0) + ((lshr(c, 16) * 65536.0) + (c & 65535))) * 1.1102230246251565e-16);
 double samp = ((u * (upper_lim - lower_lim)) + lower_lim);
-double y = anon_a7886no2me(samp);
+double y = anon_d09m9gj4gd(samp);
 	out[gid] = y;
 }
 }
-// ===== [PolyHok] Generated code for kernel 'soma_blocos' =====
+// ===== [PolyHok] Generated code for kernel 'reduce_kernel' =====
+__device__
+float anon_9e7l4n6c94(float a, float b)
+{
+return ((a + b));
+}
 __global__
-void soma_blocos(float *data, float *partial, int n)
+void reduce_kernel(float *ra, float *rout, float identity, int n)
 {
-__shared__ float shr[1024];
-	int tid = threadIdx.x;
-	int i = ((blockIdx.x * blockDim.x) + threadIdx.x);
-if((i < n))
-{
-	shr[tid] = data[i];
+__shared__ float cache[256];
+	int cacheIndex = threadIdx.x;
+	int tid = (threadIdx.x + (blockIdx.x * blockDim.x));
+	float temp = identity;
+while((tid < n)){
+	temp = anon_9e7l4n6c94(ra[tid], temp);
+	tid = (tid + (blockDim.x * gridDim.x));
 }
-else{
-	shr[tid] = 0.0;
+	cache[cacheIndex] = temp;
+__syncthreads();
+	int i = (blockDim.x / 2);
+while((i > 0)){
+if((cacheIndex < i))
+{
+	cache[cacheIndex] = anon_9e7l4n6c94(cache[(cacheIndex + i)], cache[cacheIndex]);
 }
 __syncthreads();
-	int s = 1;
-while((s < blockDim.x)){
-if(((tid % (2 * s)) == 0))
-{
-	shr[tid] = (shr[tid] + shr[(tid + s)]);
+	i = (i / 2);
 }
-	s = (s * 2);
-__syncthreads();
-}
-if((tid == 0))
+if((cacheIndex == 0))
 {
-	partial[blockIdx.x] = shr[0];
+	rout[blockIdx.x] = cache[0];
 }
 }

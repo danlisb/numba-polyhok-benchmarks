@@ -23,9 +23,10 @@ Mediana de 30 execuções numa RTX 5060, sem contar a compilação.
 | Programa | O que foi medido | Numba | PolyHok |
 |---|---|---:|---:|
 | Black-Scholes (4 milhões de opções) | só o kernel | 3,4 ms | 3,4 ms |
-| Redução (33 milhões de inteiros) | dados já na GPU | 1,7 ms | 3,4 ms |
-| Monte Carlo (16 milhões de amostras) | só a amostragem | 1,6 ms | 2,1 ms |
-| | amostragem + soma | 1,8 ms | 4,7 ms |
+| Redução (33 milhões de inteiros) | kernel do exemplo, dados já na GPU | 1,9 ms | 3,7 ms |
+| | redução genérica, dados já na GPU | 0,6 ms | 1,2 ms |
+| Monte Carlo (16 milhões de amostras) | só a amostragem | 1,7 ms | 2,4 ms |
+| | amostragem + soma | 1,9 ms | 3,2 ms |
 
 **As duas versões dão o mesmo resultado.** No Black-Scholes, as saídas são idênticas bit a bit.
 Na redução, a soma é exata. No Monte Carlo, as amostras também são idênticas, e a integral
@@ -35,23 +36,24 @@ difere só na 8ª casa decimal, pela ordem da soma.
 
 - **Black-Scholes:** Numba e PolyHok têm o mesmo desempenho. Medindo só o kernel, as duas
   versões levam cerca de 3,4 ms; a diferença entre elas é menor que a variação entre rodadas.
-- **Redução:** o código CUDA gerado é igual ao do Numba. A diferença vem, pelo menos em parte,
-  de como a PolyHok lança cada kernel: ela carrega o módulo e espera o kernel terminar a cada
-  chamada. O restante ainda não foi isolado.
+- **Redução, kernel do exemplo:** o código CUDA gerado é igual ao do Numba. A diferença vem,
+  pelo menos em parte, de como a PolyHok lança cada kernel: ela carrega o módulo e espera o
+  kernel terminar a cada chamada. O restante ainda não foi isolado.
+- **Redução genérica:** compara o `@cuda.reduce` do Numba com o `reduce` da PolyHok enviado pelo
+  prof. Andre Du Bois (o esqueleto `reduce` que vem na PolyHok 0.1.1, em `ske.ex`, está todo
+  comentado). As duas recebem a operação como função, mas usam algoritmos diferentes. O `reduce`
+  deixa a PolyHok três vezes mais rápida que o port do exemplo, e o Numba ainda é cerca de duas
+  vezes mais rápido.
 - **Monte Carlo:** a PolyHok não tem gerador aleatório nem inteiros de 64 bits, então o gerador
-  foi escrito com pares de inteiros de 32 bits, e a amostragem fica uns 35% mais lenta. Na soma
-  final, o Numba usa a redução pronta da biblioteca dele (`@cuda.reduce`). A PolyHok tem um
-  equivalente, o esqueleto `reduce` (em `ske.ex`), que recebe um vetor e uma função como `a + b`
-  e monta o kernel sozinho. Mas na versão usada aqui (PolyHok 0.1.1, branch `main` de
-  [lups-ufpel/poly_hok](https://github.com/lups-ufpel/poly_hok), de 19/11/2026) o arquivo
-  `ske.ex` está inteiro comentado. Por isso foi usada a redução simples do programa `reducao`,
-  mais lenta que a do Numba.
+  foi escrito com pares de inteiros de 32 bits, e a amostragem fica uns 40% mais lenta. A soma
+  final usa as reduções genéricas acima (`@cuda.reduce` no Numba, `reduce` na PolyHok).
 
 ## Limitações da PolyHok encontradas
 
 - Não há inteiros de 64 bits, inteiros sem sinal nem gerador de números aleatórios.
 - O esqueleto `reduce`, que monta uma redução a partir de uma função, está com o código todo
-  comentado na versão usada (0.1.1, de 19/11/2026), então não pode ser usado.
+  comentado na versão usada (0.1.1, de 19/11/2026). Foi usado no lugar o `reduce` enviado pelo
+  prof. Andre Du Bois.
 - O verificador de tipos rejeita alguns usos de `double`: um número sozinho
   (`var a double = 0.5`), a comparação com um número (`d > 0.0`) e a gravação de um
   `double` num vetor `float`.

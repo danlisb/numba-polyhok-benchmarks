@@ -11,9 +11,9 @@
 #    com int negativo. Os estados iniciais sao os mesmos do Numba (data/estados.bin), e as
 #    amostras saem identicas bit a bit (conferido por check.py).
 #
-# 2. Reducao (no Numba: @cuda.reduce, da biblioteca). O esqueleto reduce da PolyHok esta
-#    comentado nesta versao, entao a soma usa o mesmo kernel de reducao em arvore do
-#    programa de reducao (../reducao), em versao float.
+# 2. Reducao (no Numba: @cuda.reduce, da biblioteca). O esqueleto reduce da PolyHok 0.1.1
+#    esta comentado, entao a soma usa o reduce generico enviado pelo prof. Andre Du Bois,
+#    que recebe a operacao (a + b) como funcao, como o @cuda.reduce.
 #
 # A funcao integrada e passada ao kernel como parametro (kernel de ordem superior).
 #
@@ -97,46 +97,79 @@ PolyHok.defmodule MonteCarlo do
     end
   end
 
-  # ---------- reducao (mesmo kernel de ../reducao, em float) ----------
-  defk soma_blocos(data, partial, n) do
-    __shared__ shr[1024]
+  # ---------- reducao: reduce generico da PolyHok, enviado pelo prof. Andre Du Bois ----------
+  # (equivalente ao @cuda.reduce do original; so o nome do modulo no spawn foi trocado)
+  def reduce(ref, initial, f) do
+    threadsPerBlock = 256
+    numberOfBlocks = 64
 
-    tid = threadIdx.x
-    i = blockIdx.x * blockDim.x + threadIdx.x
-
-    if i < n do
-      shr[tid] = data[i]
-    else
-      shr[tid] = 0.0
-    end
-
-    __syncthreads()
-
-    s = 1
-
-    while s < blockDim.x do
-      if (tid ~>> (2 * s)) == 0 do
-        shr[tid] = shr[tid] + shr[tid + s]
+    size =
+      case PolyHok.get_shape_gnx(ref) do
+        {l, c} -> l * c
+        {size} -> size
       end
 
-      s = s * 2
+    type = PolyHok.get_type_gnx(ref)
+    result_gpu = PolyHok.new_gnx(Nx.tensor([[initial]], type: type))
+    d_partials = PolyHok.new_gnx({numberOfBlocks}, type)
+
+    PolyHok.spawn(&MonteCarlo.reduce_kernel/5, {numberOfBlocks, 1, 1}, {threadsPerBlock, 1, 1}, [
+      ref,
+      d_partials,
+      f,
+      initial,
+      size
+    ])
+
+    PolyHok.spawn(&MonteCarlo.reduce_kernel/5, {1, 1, 1}, {threadsPerBlock, 1, 1}, [
+      d_partials,
+      result_gpu,
+      f,
+      initial,
+      numberOfBlocks
+    ])
+
+    result_gpu
+  end
+
+  defk reduce_kernel(ra, rout, f, identity, n) do
+    __shared__ cache[256]
+    cacheIndex = threadIdx.x
+    tid = threadIdx.x + blockIdx.x * blockDim.x
+
+    temp = identity
+
+    while tid < n do
+      temp = f(ra[tid], temp)
+      tid = tid + blockDim.x * gridDim.x
+    end
+
+    cache[cacheIndex] = temp
+    __syncthreads()
+
+    type i int
+    i = blockDim.x / 2
+
+    while i > 0 do
+      if cacheIndex < i do
+        cache[cacheIndex] = f(cache[cacheIndex + i], cache[cacheIndex])
+      end
+
       __syncthreads()
+      i = i / 2
     end
 
-    if tid == 0 do
-      partial[blockIdx.x] = shr[0]
+    if cacheIndex == 0 do
+      rout[blockIdx.x] = cache[0]
     end
   end
 
-  def reduzir(d, n) when n <= 1 do
-    PolyHok.get_gnx(d) |> Nx.to_flat_list() |> hd()
-  end
-
-  def reduzir(d, n) do
-    nb = div(n + 1023, 1024)
-    parcial = PolyHok.new_gnx({nb}, {:f, 32})
-    PolyHok.spawn(&MonteCarlo.soma_blocos/3, {nb, 1, 1}, {1024, 1, 1}, [d, parcial, n])
-    reduzir(parcial, nb)
+  # equivale a sum_reduce(out) do original
+  def reduzir(d) do
+    MonteCarlo.reduce(d, 0.0, PolyHok.phok(fn a, b -> a + b end))
+    |> PolyHok.get_gnx()
+    |> Nx.to_flat_list()
+    |> hd()
   end
 
   # ---------- equivalentes de amostrar / integrar da versao Numba ----------
@@ -155,7 +188,7 @@ PolyHok.defmodule MonteCarlo do
     amostrar(out, st, n, tpb, lower, upper, f)
     # normalization factor: (b - a)/(N - 1)
     factor = (upper - lower) / (n - 1)
-    reduzir(out, n) * factor
+    reduzir(out) * factor
   end
 end
 
