@@ -18,15 +18,17 @@ o que foi preciso mudar ou escrever.
 
 ## Resultados
 
-Mediana de 30 execuções numa RTX 5060, sem contar a compilação.
+Mediana de 30 execuções numa RTX 5060, sem contar a compilação, com os dados já na GPU.
+Tamanhos: 4 milhões de opções no Black-Scholes, 33 milhões de inteiros na redução e
+16 milhões de amostras no Monte Carlo.
 
 | Programa | O que foi medido | Numba | PolyHok |
 |---|---|---:|---:|
-| Black-Scholes (4 milhões de opções) | só o kernel | 3,4 ms | 3,4 ms |
-| Redução (33 milhões de inteiros) | kernel do exemplo, dados já na GPU | 1,9 ms | 3,7 ms |
-| | redução genérica, dados já na GPU | 0,6 ms | 1,2 ms |
-| Monte Carlo (16 milhões de amostras) | só a amostragem | 1,7 ms | 2,4 ms |
-| | amostragem + soma | 1,9 ms | 3,2 ms |
+| Black-Scholes | só o kernel | 3,4 ms | 3,4 ms |
+| Redução | kernel do exemplo | 1,9 ms | 3,7 ms |
+| Redução | redução genérica | 0,6 ms | 1,2 ms |
+| Monte Carlo | só a amostragem | 1,7 ms | 2,4 ms |
+| Monte Carlo | amostragem + soma | 1,9 ms | 3,2 ms |
 
 **As duas versões dão o mesmo resultado.** No Black-Scholes, as saídas são idênticas bit a bit.
 Na redução, a soma é exata. No Monte Carlo, as amostras também são idênticas, e a integral
